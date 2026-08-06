@@ -116,3 +116,9 @@ propagation over argument structure is done more rigorously by ArgLLM
 project's min/product approach is the less formal version. Provenance
 typing over reasoning graphs, specifically, is the part not obviously
 already covered by either.
+
+## License
+
+This project is licensed under [PolyForm Noncommercial 1.0.0](./LICENSE) —
+free for personal use, research, evaluation, and testing, but commercial use
+requires contacting the author.
