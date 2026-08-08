@@ -174,7 +174,10 @@ except KernelReject as e:
 banner("Permissions — a module without WRITE")
 try:
     k.begin("janitor")
-    k.add_node("janitor", Node("Z1", NodeType.FACT, "anything"))
+    k.add_node("janitor", Node(
+        "Z1", NodeType.FACT, "anything",
+        provenance=Provenance("irrelevant here", Origin.RETRIEVED),
+        confidence=Confidence(0.50, Derivation.EVIDENCE)))
 except PermissionError as e:
     print(f"  PermissionError: {e}")
 k.rollback("permission denied")

@@ -135,6 +135,35 @@ class Node:
     confidence: Optional[Confidence] = None
     contested: bool = False
 
+    def __post_init__(self):
+        # A FACT with no confidence is not "unknown confidence" — it is a
+        # missing number that Rule 3's ceiling calculation (Kernel._cap)
+        # will treat as zero support, silently capping every conclusion
+        # resting on it at 0.0. Refuse to construct the node at all rather
+        # than let that happen downstream.
+        if self.type is not NodeType.FACT:
+            return
+        if self.confidence is None:
+            raise FactConfidenceError(
+                f"FACT node {self.id!r} ({self.label!r}) created without "
+                f"confidence — pass an explicit value derived from its "
+                f"source, e.g. Confidence(retrieval_score, Derivation.EVIDENCE) "
+                f"for a retrieved document, or a user-declared certainty for "
+                f"USER_INPUT. A FACT cannot carry confidence=None: Rule 3 uses "
+                f"it as the support ceiling for every CONCLUSION/HYPOTHESIS "
+                f"resting on this fact, and a missing value caps that ceiling "
+                f"at 0.0 regardless of what the rest of the graph supports."
+            )
+        if not 0.0 <= self.confidence.value <= 1.0:
+            raise FactConfidenceError(
+                f"FACT node {self.id!r} ({self.label!r}) created with "
+                f"confidence {self.confidence.value!r}, which is outside the "
+                f"valid range 0.0-1.0 — source it from the same place the "
+                f"rest of this fact's confidence came from (e.g. clamp a "
+                f"retrieval_score, or fix the derivation upstream) rather "
+                f"than passing an out-of-range number through."
+            )
+
 
 @dataclass
 class Edge:
@@ -177,6 +206,14 @@ class KernelReject(Exception):
     def __init__(self, violations):
         self.violations = violations
         super().__init__(f"{len(violations)} rejection(s)")
+
+
+class FactConfidenceError(ValueError):
+    """A FACT node was constructed, or is being aggregated over, without a
+    valid confidence value. Left unchecked, this silently caps every
+    downstream CONCLUSION/HYPOTHESIS confidence at 0.0 in Rule 3's ceiling
+    calculation (Kernel._cap) — a missing value is indistinguishable from
+    "no support" once it drops out of that computation."""
 
 
 # ---------------------------------------------------------------- kernel
@@ -374,11 +411,29 @@ class Kernel:
 
     def _cap(self, node_id: str) -> float:
         """Ceiling on confidence imposed by whatever this node rests on."""
-        vals = [
-            self.nodes[s].confidence.value
-            for s in self._support_nodes(node_id)
-            if s in self.nodes and self.nodes[s].confidence
-        ]
+        vals = []
+        for s in self._support_nodes(node_id):
+            supporter = self.nodes.get(s)
+            if supporter is None:
+                continue
+            if supporter.type is NodeType.FACT and supporter.confidence is None:
+                # Node.__post_init__ should make this unreachable — a FACT
+                # cannot be constructed without confidence. Getting here
+                # means something bypassed that check (a mutated attribute,
+                # or a graph loaded/deserialized without going through
+                # Node()). Fail loudly instead of letting this silently
+                # drop out of `vals` and cap node_id's confidence at 0.0.
+                raise FactConfidenceError(
+                    f"Rule 3 aggregation for {node_id!r} rests on FACT node "
+                    f"{s!r} which has confidence=None. This should be "
+                    f"impossible for a FACT — re-derive {s!r}'s confidence "
+                    f"from its source (retrieval_score, user-declared "
+                    f"certainty, etc.) and reconstruct it through Node(), "
+                    f"or check whatever loaded this graph for a bypass of "
+                    f"FACT confidence validation."
+                )
+            if supporter.confidence is not None:
+                vals.append(supporter.confidence.value)
         if not vals:
             return 0.0
         if self.propagation == "product":
