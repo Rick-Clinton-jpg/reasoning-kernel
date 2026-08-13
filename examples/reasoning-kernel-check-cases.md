@@ -1,13 +1,14 @@
 # Reasoning-kernel-check: two worked cases
 
 This is a transcript of two live runs of the `reasoning-kernel-check` Claude
-Skill — a Claude Code skill (kept outside this repo, at
-`~/.claude/skills/reasoning-kernel-check/`) that bundles this project's
-actual `kernel.py`, unmodified, and runs a real `Kernel.commit()` against a
-graph built from a piece of analytical reasoning. It exists to catch
-unsupported claims and overconfident conclusions the same way the kernel
-catches them anywhere else: mechanically, not by asking a model to grade its
-own homework.
+Code skill — now shipped from this repo as an official plugin, in
+`skills/reasoning-kernel-check/` (see [plugin.json](../.claude-plugin/plugin.json)
+and [marketplace.json](../.claude-plugin/marketplace.json)) — that bundles
+this project's actual `kernel.py`, unmodified, and runs a real
+`Kernel.commit()` against a graph built from a piece of analytical
+reasoning. It exists to catch unsupported claims and overconfident
+conclusions the same way the kernel catches them anywhere else:
+mechanically, not by asking a model to grade its own homework.
 
 Both cases below were run for real — the JSON shown was actually executed
 against `kernel.py`, and the trace output is copied verbatim, not
