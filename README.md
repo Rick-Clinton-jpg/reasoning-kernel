@@ -47,6 +47,25 @@ python kernel_demo.py
 Walks through all 8 rules, each shown passing and failing, using
 hand-built cases. Takes a few seconds.
 
+## Claude Code plugin
+
+This repo is also an official Claude Code plugin marketplace, shipping the
+`reasoning-kernel-check` skill: given a piece of analytical reasoning, it
+decomposes the claims into a typed graph and runs the real `Kernel.commit()`
+against it, catching unsupported facts and overconfident conclusions
+mechanically instead of by asking a model to self-assess. See
+[`examples/reasoning-kernel-check-cases.md`](./examples/reasoning-kernel-check-cases.md)
+for two worked cases.
+
+```
+/plugin marketplace add Rick-Clinton-jpg/reasoning-kernel
+/plugin install reasoning-kernel-check@reasoning-kernel
+```
+
+The skill and marketplace definitions live in
+[`skills/reasoning-kernel-check/`](./skills/reasoning-kernel-check/) and
+[`.claude-plugin/`](./.claude-plugin/).
+
 ## The real result
 
 24 cases were built specifically so a model couldn't lean on background
@@ -88,6 +107,9 @@ Both are fixed in `kernel.py`. The commit history has the detail.
 | `run_real_eval.py` | generates real model output via API, schema-enforced |
 | `graphs_ground_truth_claude-sonnet-4-6.jsonl` | the raw result — real data, not synthetic |
 | `mock_ground_truth_EXAMPLE.jsonl` | hand-built smoke-test data, one case per code path |
+| `.claude-plugin/plugin.json` | Claude Code plugin manifest for `reasoning-kernel-check` |
+| `.claude-plugin/marketplace.json` | Claude Code marketplace catalog listing the plugin |
+| `skills/reasoning-kernel-check/SKILL.md` | the skill itself — decomposes reasoning into a graph and runs it through `Kernel.commit()` |
 
 ## Honest limitations
 
