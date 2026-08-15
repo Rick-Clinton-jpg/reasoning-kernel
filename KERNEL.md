@@ -53,7 +53,7 @@ producers rather than a wall they bounce off.
 | 5. Every conclusion is traceable | CONCLUSION with no SUPPORTS or DEPENDS_ON path | REJECT |
 | 6. Contradictions are preserved | contradicted nodes marked contested; deletion refused | REPAIR / REJECT |
 | 7. Graph identity is stable | id changes refused; labels may change freely | REJECT |
-| 8. No silent mutation | every change is an event; DEPENDS_ON cycles rejected; delete becomes archive | REJECT |
+| 8. No silent mutation | every change is an event; SUPPORTS/DEPENDS_ON cycles rejected; delete becomes archive | REJECT |
 
 Verified in the demo — each rule shown passing and failing.
 

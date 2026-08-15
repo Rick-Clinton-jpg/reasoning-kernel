@@ -444,11 +444,18 @@ class Kernel:
         return min(vals)
 
     def _has_cycle(self) -> list:
-        """DEPENDS_ON cycles. Iterative DFS — recursion is a liability here."""
+        """Cycles in the grounding relation. Same 'what does X rest on'
+        relation _support_nodes computes for Rule 3's ceiling (DEPENDS_ON:
+        src rests on dst; SUPPORTS: dst rests on src) — a cycle here means
+        circular justification, e.g. A supports B and B supports A, each
+        citing the other as its reason to exist. Iterative DFS — recursion
+        is a liability here."""
         adj = {}
         for e in self.edges:
             if e.type is EdgeType.DEPENDS_ON:
                 adj.setdefault(e.src, []).append(e.dst)
+            elif e.type is EdgeType.SUPPORTS:
+                adj.setdefault(e.dst, []).append(e.src)
         WHITE, GREY, BLACK = 0, 1, 2
         colour = {n: WHITE for n in self.nodes}
         found = []
@@ -538,7 +545,7 @@ class Kernel:
 
         for c in self._has_cycle():
             v.append(Violation(8, Severity.REJECT, c.split(" -> ")[0],
-                               f"DEPENDS_ON cycle: {c}"))
+                               f"circular grounding (SUPPORTS/DEPENDS_ON): {c}"))
 
         return v
 

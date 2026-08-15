@@ -17,6 +17,7 @@ import unittest
 from kernel import (
     Kernel, Node, Edge, Provenance, Confidence,
     NodeType, EdgeType, Perm, Origin, Derivation, FactConfidenceError,
+    KernelReject,
 )
 
 
@@ -151,6 +152,93 @@ class Rule3AggregationTests(unittest.TestCase):
         k.add_edge("m", Edge("F1", "CN1", EdgeType.SUPPORTS))
         findings = k.commit()  # must not raise
         self.assertAlmostEqual(k.nodes["CN1"].confidence.value, 0.80)
+
+
+class Rule8SupportCycleTests(unittest.TestCase):
+    """Rule 8's cycle check used to look only at DEPENDS_ON edges, so a
+    circular SUPPORTS chain (A supports B, B supports A — each node citing
+    the other as its own justification) passed validation with zero
+    findings: Rule 5's traceability check only requires a non-empty
+    grounding list, which a cycle trivially satisfies. _has_cycle now walks
+    the same 'what does X rest on' relation _support_nodes computes for
+    Rule 3 (DEPENDS_ON: src rests on dst; SUPPORTS: dst rests on src), so a
+    cycle in either edge type — or a mix of both — is caught."""
+
+    def _kernel(self):
+        k = Kernel()
+        k.grant("m", {Perm.READ, Perm.WRITE})
+        return k
+
+    def test_two_node_supports_cycle_rejected(self):
+        k = self._kernel()
+        k.begin("m")
+        k.add_node("m", Node("A", NodeType.CONCLUSION, "A",
+                              confidence=Confidence(0.5, Derivation.REASONING)))
+        k.add_node("m", Node("B", NodeType.CONCLUSION, "B",
+                              confidence=Confidence(0.5, Derivation.REASONING)))
+        k.add_edge("m", Edge("A", "B", EdgeType.SUPPORTS))
+        k.add_edge("m", Edge("B", "A", EdgeType.SUPPORTS))
+        with self.assertRaises(KernelReject) as ctx:
+            k.commit()
+        self.assertTrue(any(v.rule == 8 for v in ctx.exception.violations))
+
+    def test_self_supporting_node_rejected(self):
+        k = self._kernel()
+        k.begin("m")
+        k.add_node("m", Node("A", NodeType.CONCLUSION, "A",
+                              confidence=Confidence(0.5, Derivation.REASONING)))
+        k.add_edge("m", Edge("A", "A", EdgeType.SUPPORTS))
+        with self.assertRaises(KernelReject) as ctx:
+            k.commit()
+        self.assertTrue(any(v.rule == 8 for v in ctx.exception.violations))
+
+    def test_mixed_supports_depends_on_cycle_rejected(self):
+        k = self._kernel()
+        k.begin("m")
+        k.add_node("m", Node("A", NodeType.CONCLUSION, "A",
+                              confidence=Confidence(0.5, Derivation.REASONING)))
+        k.add_node("m", Node("B", NodeType.CONCLUSION, "B",
+                              confidence=Confidence(0.5, Derivation.REASONING)))
+        # A rests on B via SUPPORTS (B -> A), B rests on A via DEPENDS_ON (B -> A)
+        k.add_edge("m", Edge("B", "A", EdgeType.SUPPORTS))
+        k.add_edge("m", Edge("B", "A", EdgeType.DEPENDS_ON))
+        with self.assertRaises(KernelReject) as ctx:
+            k.commit()
+        self.assertTrue(any(v.rule == 8 for v in ctx.exception.violations))
+
+    def test_convergent_supports_not_flagged_as_cycle(self):
+        """A diamond — two independent facts supporting the same hypothesis,
+        which supports a conclusion — is a legitimate DAG, not a cycle, and
+        must still commit cleanly."""
+        k = self._kernel()
+        k.begin("m")
+        k.add_node("m", Node("F1", NodeType.FACT, "f1",
+                              provenance=Provenance("s1", Origin.RETRIEVED),
+                              confidence=Confidence(0.8, Derivation.EVIDENCE)))
+        k.add_node("m", Node("F2", NodeType.FACT, "f2",
+                              provenance=Provenance("s2", Origin.RETRIEVED),
+                              confidence=Confidence(0.9, Derivation.EVIDENCE)))
+        k.add_node("m", Node("H1", NodeType.HYPOTHESIS, "h1",
+                              confidence=Confidence(0.7, Derivation.REASONING)))
+        k.add_node("m", Node("C1", NodeType.CONCLUSION, "c1",
+                              confidence=Confidence(0.7, Derivation.REASONING)))
+        k.add_edge("m", Edge("F1", "H1", EdgeType.SUPPORTS))
+        k.add_edge("m", Edge("F2", "H1", EdgeType.SUPPORTS))
+        k.add_edge("m", Edge("H1", "C1", EdgeType.SUPPORTS))
+        findings = k.commit()  # must not raise
+        self.assertFalse(any(v.rule == 8 for v in findings))
+
+    def test_depends_on_cycle_still_rejected(self):
+        """Pre-existing DEPENDS_ON-only cycle detection must keep working."""
+        k = self._kernel()
+        k.begin("m")
+        k.add_node("m", Node("X1", NodeType.CONCLUSION, "x1"))
+        k.add_node("m", Node("X2", NodeType.CONCLUSION, "x2"))
+        k.add_edge("m", Edge("X1", "X2", EdgeType.DEPENDS_ON))
+        k.add_edge("m", Edge("X2", "X1", EdgeType.DEPENDS_ON))
+        with self.assertRaises(KernelReject) as ctx:
+            k.commit()
+        self.assertTrue(any(v.rule == 8 for v in ctx.exception.violations))
 
 
 if __name__ == "__main__":
